@@ -1,117 +1,73 @@
 // src/features/candidates/AddCandidateModal.js
-import React from 'react';
-import { Modal, Form, Input, Select, Divider, Typography } from 'antd';
+import React, { useState } from 'react';
+import { Modal, Form, Input, Button, Divider, Typography, message, Row, Col } from 'antd';
+import { useDispatch } from 'react-redux';
+import { checkDuplicateCandidate } from '../../features/demands/demandSlice';
+import DuplicateCandidateModal from './DuplicateCandidateModal';
 
-const { Option } = Select;
-const { Text } = Typography;
-
-const AddCandidateModal = ({ open, onCreate, onCancel, vendors, loading }) => {
+const AddCandidateModal = ({ open, onCreate, onCancel, demandId }) => {
     const [form] = Form.useForm();
+    const dispatch = useDispatch();
 
-    const handlePaste = (event) => {
-        // 阻止默认的粘贴行为
-        event.preventDefault();
-        // 从剪贴板获取纯文本数据
-        const pastedText = event.clipboardData.getData('text/plain');
-        // 按 Tab 分隔符将文本拆分为数组
-        const values = pastedText.split('\t').map(item => item.trim());
+    const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
+    const [newCandidateData, setNewCandidateData] = useState(null);
+    const [existingCandidate, setExistingCandidate] = useState(null);
 
-        // 根据需求文档中的列顺序进行映射
-        // |0 Date|1 Resource Name|2 Gender|3 Skillset|4 Seniority|5 Related Working Experience|
-        // |6 Onboarding Time|7 Skill Highlights|8 English Capability|9 Internal Interview feedback|10 Online coding result|
-        // 最后一列 "CV screen result" 不录入
-
-        if (values.length >= 11) {
-            const formData = {
-                name: values[1],
-                gender: values[2],
-                skillset: values[3],
-                seniority: values[4],
-                relatedWorkingExperience: values[5],
-                onboardingTime: values[6],
-                skillHighlights: values[7],
-                englishCapability: values[8],
-                internalInterviewFeedback: values[9],
-                onlineCodingResult: values[10],
-                // 多个字段可以合并到 resumeSummary 中，方便统一查看
-                resumeSummary: `Skill Highlights: ${values[7]}\n\nEnglish Capability: ${values[8]}\n\nInternal Interview Feedback: ${values[9]}\n\nOnline Coding Result: ${values[10]}`,
-            };
-
-            // 使用 antd form API 自动填充表单
-            form.setFieldsValue(formData);
-        }
-    };
-
-    return (
-        <Modal
-            open={open}
-            title="Add a New Candidate"
-            okText="Add"
-            cancelText="Cancel"
-            width={800} // 加宽模态框以容纳更多字段
-            onCancel={onCancel}
-            onOk={() => {
-                form
-                    .validateFields()
-                    .then((values) => {
-                        form.resetFields();
-                        onCreate(values);
-                    })
-                    .catch((info) => {
-                        console.log('Validate Failed:', info);
-                    });
-            }}
-        >
-            <Form form={form} layout="vertical" name="add_candidate_form">
-                <Text type="secondary">
-                    You can paste a table row (tab-separated) from email or Excel into the box below to auto-fill the form.
-                </Text>
-                <Input.TextArea 
-                    rows={2} 
-                    placeholder="Paste candidate data here" 
-                    onPaste={handlePaste} 
-                    style={{ margin: '8px 0 24px 0' }}
-                />
+    const handleOk = () => {
+        form.validateFields().then(async (values) => {
+            try {
+                console.log('%c[DEBUG] Step 1: Submitting for duplicate check with:', 'color: blue', { name: values.name, demandId });
+                const resultAction = await dispatch(checkDuplicateCandidate({ name: values.name, demandId })).unwrap();
                 
-                <Divider />
+                // --- START FIX & DEBUG LOGS ---
+                console.log('%c[DEBUG] Step 2: Received API response:', 'color: blue', resultAction);
 
-                <Form.Item
-                    name="name"
-                    label="Candidate Name"
-                    rules={[{ required: true, message: 'Please input the candidate name!' }]}
-                >
-                    <Input />
-                </Form.Item>
-                <Form.Item
-                    name="vendorId"
-                    label="Vendor"
-                    rules={[{ required: true, message: 'Please select a vendor!' }]}
-                >
-                    <Select placeholder="Select a vendor" loading={loading}>
-                        {vendors.map(vendor => (
-                            <Option key={vendor.id} value={vendor.id}>
-                                {vendor.companyName}
-                            </Option>
-                        ))}
-                    </Select>
-                </Form.Item>
-                {/* --- 新增字段 --- */}
-                <Form.Item name="gender" label="Gender"><Input /></Form.Item>
-                <Form.Item name="skillset" label="Skillset"><Input /></Form.Item>
-                <Form.Item name="seniority" label="Seniority"><Input /></Form.Item>
-                <Form.Item name="relatedWorkingExperience" label="Related Working Experience"><Input.TextArea /></Form.Item>
-                <Form.Item name="onboardingTime" label="Onboarding Time"><Input /></Form.Item>
-                <Form.Item name="skillHighlights" label="Skill Highlights"><Input.TextArea /></Form.Item>
-                <Form.Item name="englishCapability" label="English Capability"><Input /></Form.Item>
-                <Form.Item name="internalInterviewFeedback" label="Internal Interview Feedback"><Input.TextArea /></Form.Item>
-                <Form.Item name="onlineCodingResult" label="Online Coding Result"><Input /></Form.Item>
-                {/* --- 简历总结字段保留，用于手动输入或由粘贴逻辑填充 --- */}
-                <Form.Item name="resumeSummary" label="Resume Summary">
-                    <Input.TextArea rows={6} />
-                </Form.Item>
-            </Form>
-        </Modal>
+                // FIX 1: Check for the correct property 'duplicate'
+                if (resultAction.duplicate && resultAction.matchingCandidates?.length > 0) {
+                    console.log('%c[DEBUG] Step 3: Duplicate found. Opening comparison modal.', 'color: green');
+                    setNewCandidateData(values);
+                    // FIX 2: Get the first candidate from the 'matchingCandidates' array
+                    setExistingCandidate(resultAction.matchingCandidates[0]);
+                    setIsDuplicateModalOpen(true);
+                } else {
+                    console.log('%c[DEBUG] Step 3: No duplicate found. Proceeding to create.', 'color: green');
+                    form.resetFields();
+                    onCreate(values);
+                }
+                // --- END FIX & DEBUG LOGS ---
+
+            } catch (err) {
+                console.error('[DEBUG] Error during duplicate check:', err);
+                message.error(`Error checking for duplicates: ${err}`);
+            }
+        }).catch(info => {
+            console.log('Validate Failed:', info);
+        });
+    };
+    
+    // ... rest of the component is unchanged ...
+    const handleParse = () => { const pasteData = form.getFieldValue('pasteArea'); if (!pasteData) { message.warning('Please paste data into the text area first.'); return; } const values = pasteData.split('\t').map(item => item.trim()); if (values.length >= 12) { const formData = { vendorName: values[1], name: values[2], gender: values[3], skillset: values[4], seniority: values[5], relatedWorkingExperience: values[6], onboardingTime: values[7], skillHighlights: values[8], englishCapability: values[9], onlineCodingResult: values[10], internalInterviewFeedback: values[11], resumeSummary: `Pasted from source.\nSkill Highlights: ${values[8]}\n\nEnglish Capability: ${values[9]}\n\nOnline Coding Result: ${values[10]}\n\nInternal Interview Feedback: ${values[11]}\n\nRelated Experience: ${values[6]}`, }; form.setFieldsValue(formData); message.success('Data parsed and fields populated!'); } else { message.error(`Pasted data format is incorrect. Expected 12 tab-separated columns, but got ${values.length}.`); } };
+    const handleProceedAnyway = () => { form.resetFields(); onCreate(newCandidateData); setIsDuplicateModalOpen(false); };
+    return (
+        <>
+            <Modal open={open} title="Add a New Candidate" okText="Add" cancelText="Cancel" width={800} onCancel={onCancel} onOk={handleOk}>
+                <Form form={form} layout="vertical" name="add_candidate_form">
+                    <Form.Item name="pasteArea" label="Paste Area"><Input.TextArea rows={3} placeholder="Paste a single table row (tab-separated) here from your source."/></Form.Item>
+                    <Button onClick={handleParse} style={{ marginBottom: 24 }}>Parse Pasted Content</Button>
+                    <Divider />
+                    <Row gutter={16}><Col span={12}><Form.Item name="name" label="Resource Name" rules={[{ required: true, message: 'Resource Name is required!' }]}><Input /></Form.Item></Col><Col span={12}><Form.Item name="vendorName" label="Vendor Name" rules={[{ required: true, message: 'Vendor Name is required!' }]}><Input placeholder="Auto-filled by parsing or enter manually" /></Form.Item></Col></Row>
+                    <Row gutter={16}><Col span={12}><Form.Item name="gender" label="Gender"><Input /></Form.Item></Col><Col span={12}><Form.Item name="seniority" label="Seniority"><Input /></Form.Item></Col></Row>
+                    <Row gutter={16}><Col span={12}><Form.Item name="englishCapability" label="English Capability"><Input /></Form.Item></Col><Col span={12}><Form.Item name="onboardingTime" label="Onboarding Time"><Input /></Form.Item></Col></Row>
+                    <Form.Item name="skillset" label="Skillset"><Input.TextArea autoSize={{ minRows: 2 }} /></Form.Item>
+                    <Form.Item name="skillHighlights" label="Skill Highlights"><Input.TextArea autoSize={{ minRows: 2 }} /></Form.Item>
+                    <Form.Item name="relatedWorkingExperience" label="Related Working Experience"><Input.TextArea autoSize={{ minRows: 2 }} /></Form.Item>
+                    <Form.Item name="onlineCodingResult" label="Online Coding Result"><Input.TextArea autoSize={{ minRows: 2 }} /></Form.Item>
+                    <Form.Item name="internalInterviewFeedback" label="Internal Interview Feedback"><Input.TextArea autoSize={{ minRows: 2 }} /></Form.Item>
+                    <Form.Item name="resumeSummary" label="Generated Resume Summary"><Input.TextArea autoSize={{ minRows: 5 }} readOnly /></Form.Item>
+                </Form>
+            </Modal>
+            {isDuplicateModalOpen && ( <DuplicateCandidateModal open={isDuplicateModalOpen} onProceed={handleProceedAnyway} onCancel={() => setIsDuplicateModalOpen(false)} newCandidateData={newCandidateData} existingCandidate={existingCandidate} /> )}
+        </>
     );
 };
-
 export default AddCandidateModal;

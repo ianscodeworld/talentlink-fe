@@ -1,15 +1,17 @@
 // src/pages/admin/UserManagementPage.js
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { Table, Button, Spin, Alert, Typography, Modal } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
-import { fetchInterviewers, createUser } from '../../features/users/userSlice';
+import { Table, Button, Spin, Alert, Typography, message, Popconfirm, Space } from 'antd';
+import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
+import { fetchInterviewers, createUser, deleteUser, updateUser } from '../../features/users/userSlice';
 import CreateUserModal from '../../features/users/CreateUserModal';
+import EditUserModal from '../../features/users/EditUserModal'; // 1. Import Edit Modal
 
 const { Title } = Typography;
 
 const UserManagementPage = () => {
-    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    const [editingUser, setEditingUser] = useState(null); // 2. State for editing
     const dispatch = useDispatch();
     const { interviewers, status, error } = useSelector((state) => state.users);
 
@@ -19,26 +21,17 @@ const UserManagementPage = () => {
         }
     }, [status, dispatch]);
 
-    const handleCreate = async (values) => {
+    const handleCreate = async (values) => { try { await dispatch(createUser(values)).unwrap(); setIsCreateModalOpen(false); message.success('User created successfully.'); } catch (err) { message.error(`Failed to create user: ${err}`); } };
+    const handleDelete = async (userId) => { try { await dispatch(deleteUser(userId)).unwrap(); message.success('User deleted successfully.'); } catch (err) { message.error(`Failed to delete user: ${err}`); } };
+    
+    // 3. Handler for updating
+    const handleUpdate = async (userId, values) => {
         try {
-            const resultAction = await dispatch(createUser(values)).unwrap();
-            setIsModalOpen(false);
-            // 显示包含临时密码的成功提示
-            Modal.success({
-                title: 'User Created Successfully',
-                content: (
-                    <div>
-                        <p>A new account has been created for <strong>{resultAction.name}</strong>.</p>
-                        <p>Please provide them with the following temporary password:</p>
-                        <p style={{ background: '#f0f2f5', padding: '8px', borderRadius: '4px', fontWeight: 'bold' }}>
-                            {resultAction.temporaryPassword}
-                        </p>
-                    </div>
-                ),
-            });
+            await dispatch(updateUser({ userId, userData: values })).unwrap();
+            setEditingUser(null);
+            message.success('User updated successfully.');
         } catch (err) {
-            // 错误提示已由 Thunk 和 message 组件处理，这里只记录日志
-            console.error('Failed to create user:', err);
+            message.error(`Failed to update user: ${err}`);
         }
     };
 
@@ -46,21 +39,51 @@ const UserManagementPage = () => {
         { title: 'ID', dataIndex: 'id', key: 'id' },
         { title: 'Name', dataIndex: 'name', key: 'name' },
         { title: 'Email', dataIndex: 'email', key: 'email' },
+        {
+            title: 'Action',
+            key: 'action',
+            render: (_, record) => (
+                <Space size="middle">
+                    <Button type="link" icon={<EditOutlined />} onClick={() => setEditingUser(record)}>
+                        Edit
+                    </Button>
+                    <Popconfirm
+                        title="Delete the user"
+                        description="Are you sure to delete this user?"
+                        onConfirm={() => handleDelete(record.id)}
+                        okText="Yes"
+                        cancelText="No"
+                    >
+                        <Button type="link" danger icon={<DeleteOutlined />}>
+                            Delete
+                        </Button>
+                    </Popconfirm>
+                </Space>
+            ),
+        },
     ];
 
     return (
         <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-                <Title level={2}>Interviewer Management</Title>
-                <Button type="primary" icon={<PlusOutlined />} onClick={() => setIsModalOpen(true)}>
-                    Create New Interviewer
+                <Title level={2}>User Management</Title>
+                <Button type="primary" icon={<PlusOutlined />} onClick={() => setIsCreateModalOpen(true)}>
+                    Create New User
                 </Button>
             </div>
             
             <CreateUserModal
-                open={isModalOpen}
+                open={isCreateModalOpen}
                 onCreate={handleCreate}
-                onCancel={() => setIsModalOpen(false)}
+                onCancel={() => setIsCreateModalOpen(false)}
+            />
+
+            {/* 4. Render the Edit Modal */}
+            <EditUserModal
+                open={!!editingUser}
+                onUpdate={handleUpdate}
+                onCancel={() => setEditingUser(null)}
+                initialUserData={editingUser}
             />
 
             {error && <Alert message={`Error: ${error}`} type="error" style={{ marginBottom: 16 }} />}
@@ -69,7 +92,6 @@ const UserManagementPage = () => {
                 dataSource={interviewers}
                 rowKey="id"
                 loading={status === 'loading'}
-                // For simplicity, this table is not paginated yet, but can be easily added.
             />
         </div>
     );

@@ -20,11 +20,29 @@ export const updateMyPasswordApi = async (passwordData) => {
 };
 
 /**
- * HM 创建一个新的面试官账户
- * @param {object} userData - { name, email, specialties }
+ * HM 创建一个新的用户账户
+ * @param {object} userData - { name, email, role, specialties }
  */
 export const createUserApi = async (userData) => {
     const response = await axiosInstance.post('/admin/users', userData);
-    // 假设后端会特别为此返回一个包含临时密码的对象
+    return response.data;
+};
+
+/**
+ * HM 修改一个已存在用户的信息
+ * @param {string} userId
+ * @param {object} userData - { role, specialties }
+ */
+export const updateUserApi = async (userId, userData) => {
+    const response = await axiosInstance.put(`/admin/users/${userId}`, userData);
+    return response.data;
+};
+
+/**
+ * HM 删除一个用户
+ * @param {string} userId
+ */
+export const deleteUserApi = async (userId) => {
+    const response = await axiosInstance.delete(`/admin/users/${userId}`);
     return response.data;
 };

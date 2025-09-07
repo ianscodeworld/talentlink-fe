@@ -1,37 +1,40 @@
-// src/features/users/CreateUserModal.js
-import React from 'react';
-import { Modal, Form, Input, Select } from 'antd';
+// src/features/users/EditUserModal.js
+import React, { useEffect } from 'react';
+import { Modal, Form, Select, Typography } from 'antd';
 
 const { Option } = Select;
+const { Text } = Typography;
 
-const CreateUserModal = ({ open, onCreate, onCancel }) => {
+const EditUserModal = ({ open, onUpdate, onCancel, initialUserData }) => {
     const [form] = Form.useForm();
     const specialtiesOptions = ["JAVA", "QA", "REACT", "FULLSTACK", "GO"];
+
+    useEffect(() => {
+        if (initialUserData) {
+            form.setFieldsValue(initialUserData);
+        }
+    }, [initialUserData, form]);
 
     return (
         <Modal
             open={open}
-            title="Create a New User"
-            okText="Create"
+            title={`Edit User: ${initialUserData?.name}`}
+            okText="Update"
             cancelText="Cancel"
             onCancel={onCancel}
             onOk={() => {
                 form.validateFields().then(values => {
-                    form.resetFields();
-                    onCreate(values);
+                    // We only pass the changed values
+                    onUpdate(initialUserData.id, values);
                 }).catch(info => {
                     console.log('Validate Failed:', info);
                 });
             }}
         >
-            <Form form={form} layout="vertical" name="create_user_form">
-                <Form.Item name="name" label="Username" rules={[{ required: true, message: 'Please input the username!' }]}>
-                    <Input />
-                </Form.Item>
-                <Form.Item name="email" label="Email" rules={[{ required: true, type: 'email', message: 'Please input a valid email!' }]}>
-                    <Input />
-                </Form.Item>
-                {/* 新增角色选择 */}
+            <Typography.Paragraph>
+                <Text strong>Email: </Text><Text type="secondary">{initialUserData?.email}</Text>
+            </Typography.Paragraph>
+            <Form form={form} layout="vertical" name="edit_user_form">
                 <Form.Item name="role" label="Role" rules={[{ required: true, message: 'Please select a role!' }]}>
                     <Select placeholder="Select a role">
                         <Option value="HM">HM</Option>
@@ -48,4 +51,4 @@ const CreateUserModal = ({ open, onCreate, onCancel }) => {
     );
 };
 
-export default CreateUserModal;
+export default EditUserModal;

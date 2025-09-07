@@ -28,7 +28,7 @@ const candidateHistorySlice = createSlice({
             totalPages: 0,
             totalElements: 0,
             currentPage: 0,
-            size: 10,
+            size: 20, // Default size
         },
     },
     reducers: {
@@ -36,6 +36,7 @@ const candidateHistorySlice = createSlice({
             state.items = [];
             state.status = 'idle';
             state.error = null;
+            state.pagination = { totalPages: 0, totalElements: 0, currentPage: 0, size: 20 };
         }
     },
     extraReducers: (builder) => {
